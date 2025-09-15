@@ -4,15 +4,13 @@ from typing import Dict, List, Sequence, Optional, Tuple
 import torch
 
 try:
-    from captum.concept import TCAV, Concept, Classifier  # type: ignore
+    from captum.concept import TCAV, Concept, Classifier 
 except Exception:
-    TCAV = None  # type: ignore
-    Concept = None  # type: ignore
-    Classifier = object  # type: ignore
+    TCAV = None  
+    Concept = None  
+    Classifier = object  
 
 class HookedClassifier(Classifier): 
-    """Minimal PyTorch classifier wrapper for Captum TCAV.
-    Replace with your own wrapper if you already have one."""
     def __init__(self, model: torch.nn.Module, layers: Sequence[torch.nn.Module], device: torch.device):
         self.model = model
         self.layers = list(layers)
@@ -41,10 +39,25 @@ def make_concepts(concepts_root: str, concept_names: Sequence[str]) -> List["Con
         cons.append(Concept(i, name, concepts_root))
     return cons
 
-def run_tcav_for_sets(classifier: "Classifier", experimental_sets: Sequence[Sequence[str]], layers: Sequence[torch.nn.Module], *, random_state: int = 0, processes: int = 0) -> Dict[str, Dict[str, float]]:
-    """Execute TCAV across experimental sets and return a compact dict:
-        {layer_name: {concept_name: mean_tcav_score, ...}, ...}
-    NOTE: Thin wrapper; adapt for your own post-processing.
+def run_tcav_for_sets(
+    classifier: "Classifier",
+    experimental_sets: Sequence[Sequence["Concept"]],
+    layers: Sequence[torch.nn.Module],
+    *,
+    random_state: int = 0,
+    processes: int = 0,
+) -> Dict[str, Dict[Tuple[str, str], Dict[str, float]]]:
+    """
+    Returns:
+      {
+        layer_name: {
+          (concept_name, random_name): {
+            "pos": <int>,
+            "neg": <int>,
+            "rate": <float in [0,1]>,   # pos / (pos+neg)
+          }, ...
+        }, ...
+      }
     """
     if TCAV is None:
         raise ImportError("captum.concept not available. Install captum to run TCAV.")
@@ -52,20 +65,25 @@ def run_tcav_for_sets(classifier: "Classifier", experimental_sets: Sequence[Sequ
     tcav = TCAV(classifier, layers)
     raw = tcav.interpret(experimental_sets, random_state=random_state, processes=processes)
 
-    results: Dict[str, Dict[str, float]] = {}
-    for exp_key, per_layer in raw.items():
+    results: Dict[str, Dict[Tuple[str, str], Dict[str, float]]] = {}
+    for exp_idx, per_layer in raw.items():
+        # Captum uses keys like "0-1" (conceptIndex-randomIndex)
+        c_idx_str, r_idx_str = str(exp_idx).split("-")
+        c_idx, r_idx = int(c_idx_str), int(r_idx_str)
+        concept_name = experimental_sets[c_idx][0].name
+        random_name  = experimental_sets[r_idx][1].name
+
         for layer_name, stats in per_layer.items():
-            # Captum typically returns tensors under 'sign_count' and 'magnitude'.
             sign = stats.get("sign_count", None)
-            if sign is None:
+            if sign is None or getattr(sign, "numel", lambda: 0)() < 2:
                 continue
-            try:
-                # Treat sign[0] as "positive count"
-                score = float(sign[0].item() if hasattr(sign[0], "item") else sign[0])
-            except Exception:
-                try:
-                    score = float(sign.item())
-                except Exception:
-                    score = float("nan")
-            results.setdefault(layer_name, {})[exp_key] = score
+            pos = float(sign[0].item()) if hasattr(sign[0], "item") else float(sign[0])
+            neg = float(sign[1].item()) if hasattr(sign[1], "item") else float(sign[1])
+            total = max(pos + neg, 1.0)
+            rate = pos / total
+
+            results.setdefault(layer_name, {})[(concept_name, random_name)] = {
+                "pos": pos, "neg": neg, "rate": rate
+            }
     return results
+
