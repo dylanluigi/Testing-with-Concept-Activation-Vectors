@@ -1,0 +1,38 @@
+python .\generator\gen_tcav_concepts.py `
+  --src "C:\Users\Dylan\Desktop\TCAV Captum\data\aixi_shape\train" `
+  --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" `
+  --size 128 `
+  --circle-halves `
+  --square-corners `
+  --make-random-pool `
+  --random-bg-per-image 2
+
+
+python .\generator\generator.py --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts"
+
+python generator\generator.py --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" --size 128 --n-per-concept 200 --random-pool --random-pool-count 3000
+
+python .\generator\generator.py --input "C:\Users\Dylan\Desktop\TCAV Captum\data\aixi_shape\train" --output "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" --max-images 1000
+
+python extract_fractions.py --input ./aixi_dataset --output ./tcav_concepts --no-enhance --max-images 5000
+
+python .\generator\generator.py `
+  --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" `
+  --size 128 `
+  --per-concept 5000 `
+  --intensities 1-10 `
+  --concepts all `
+  --random-pool `
+  --random-pool-count 5000 `
+  --seed 42
+
+
+python .\generator\generator.py `
+  --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts_white" `
+  --size 128 `
+  --per-concept 5000 `
+  --white-only `
+  --concepts all `
+  --random-pool `
+  --random-pool-count 5000 `
+  --seed 42

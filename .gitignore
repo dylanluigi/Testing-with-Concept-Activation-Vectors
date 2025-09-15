@@ -1,0 +1,8 @@
+# Ignore all files in tcav directory
+tcav/
+
+# Ignore all files in data/aixi_shape directory  
+data/aixi_shape/
+
+# Ignore all files in data/concepts directory
+data/concepts/
