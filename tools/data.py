@@ -123,4 +123,98 @@ def build_loader(
     )
     
 
+# ---------------------------------------------------------------------
+# Generacio de pools randoms synthetics
+# ---------------------------------------------------------------------
 
+def _rand_color() -> Tuple[int, int, int]:
+    """
+    Crea una tupla RGB aleatoria.
+    """
+    return tuple(np.random.randint(0, 256, size=3).tolist())
+
+def _draw_random_shape(draw: ImageDraw.ImageDraw, w: int, h: int):
+    """
+    Dibuixa una primitiva simple,
+    """
+    import numpy as _np
+    shape = _np.random.choice(["ellipse", "rect", "line"]) 
+    xy = [
+        int(_np.random.randint(0, w//2)),
+        int(_np.random.randint(0, h//2)),
+        int(_np.random.randint(w//2, w)),
+        int(_np.random.randint(h//2, h)),
+    ]
+    if shape == "ellipse":
+        draw.ellipse(xy, outline=_rand_color(), width=int(_np.random.randint(1, 6)))
+    elif shape == "rect":
+        draw.rectangle(xy, outline=_rand_color(), width=int(_np.random.randint(1, 6)))
+    else:
+        draw.line(xy, fill=_rand_color(), width=int(_np.random.randint(1, 6)))
+
+def synth_random_image(size: int = 128) -> Image.Image:
+    """
+    Crea un imatge random sintetica.
+    """
+    
+    arr = (np.random.rand(size, size, 3) * 255).astype("uint8")
+    base = Image.fromarray(arr)
+    draw = ImageDraw.Draw(base)
+    
+    for _ in range(int(np.random.randint(1, 4))):
+        _draw_random_shape(draw, size, size)
+    return base
+
+def build_random_pool(
+    out_dir: str | Path, *,
+    count: int = 2000,
+    size: int = 128,
+    prefix: str = "rand"
+) -> List[Path]:
+    """
+    Generacio de fitxers amb imatges randomitzades sintetiques.
+    """
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)  
+    paths: List[Path] = []
+    for i in range(count):
+        img = synth_random_image(size)          
+        p = out / f"{prefix}_{i:06d}.png"       
+        img.save(p)                              
+        paths.append(p)
+    return paths
+
+# ---------------------------------------------------------------------
+# Sets experimentals per a TCAV
+# ---------------------------------------------------------------------
+
+def build_experimental_sets(
+    concepts: Sequence[str],
+    n_random: int,
+    resamples: int,
+    *,
+    random_pool_names: Sequence[str]
+) -> List[List[str]]:
+    """
+
+    Cear una llista de sets experimentals (parells de) per a TCAV, tal que:
+    [nom_conepte, pool_random_nom]
+
+    Exemples:
+      concepts        = ['circle', 'square']
+      random_pool_names = ['random_pool_0', 'random_pool_1']
+      n_random        = 2
+      resamples       = 3
+
+    Notes:
+      - We shuffle `random_pool_names` before each resample to vary pairings.
+      - Only the first `n_random` random pools after shuffling are used each round.
+    """
+    exps: List[List[str]] = []
+    rp = list(random_pool_names)  
+    for _ in range(resamples):
+        random.shuffle(rp)  
+        for c in concepts:
+            for r in rp[:n_random]:
+                exps.append([c, r])
+    return exps
