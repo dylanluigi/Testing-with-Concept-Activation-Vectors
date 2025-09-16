@@ -6,3 +6,5 @@ data/aixi_shape/
 
 # Ignore all files in data/concepts directory
 data/concepts/
+
+cav/
