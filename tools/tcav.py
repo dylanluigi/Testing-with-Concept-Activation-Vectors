@@ -1,43 +1,125 @@
 from __future__ import annotations
-from typing import Dict, List, Sequence, Optional, Tuple
-
+from typing import Dict, List, Sequence, Optional, Tuple, Any, Union
+from PIL import Image
 import torch
+import numpy as np
+
+# These are your own modules, so the relative imports are correct
+from . import data as data_mod
+from .utils import select_device
 
 try:
-    from captum.concept import TCAV, Concept, Classifier 
+    from captum.concept import TCAV, Concept, Classifier
 except Exception:
-    TCAV = None  
-    Concept = None  
-    Classifier = object  
+    TCAV = None
+    Concept = None
+    Classifier = object
 
-class HookedClassifier(Classifier): 
-    def __init__(self, model: torch.nn.Module, layers: Sequence[torch.nn.Module], device: torch.device):
-        self.model = model
-        self.layers = list(layers)
-        self.device = device
+class TorchLinearClassifier(Classifier):
+    def __init__(self, device: Union[str, torch.device] = "cpu",
+                 epochs: int = 200, lr: float = 0.1, weight_decay: float = 0.0):
+        self.device = torch.device(device)
+        self.epochs = int(epochs)
+        self.lr = float(lr)
+        self.weight_decay = float(weight_decay)
+        self._linear: torch.nn.Linear | None = None
+        self._classes: List[int] = []
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.model(inputs.to(self.device))
+    def train_and_eval(self, dataloader, **kwargs: Any) -> Dict[str, Any] | None:
+        Xs, Ys = [], []
+        for batch in dataloader:
+            if isinstance(batch, (list, tuple)) and len(batch) == 2:
+                feats, labels = batch
+            else:
+                raise RuntimeError("Expected (features, labels) batches")
+            # feats: [B,C,H,W] or [B,F] or [C,H,W]
+            if feats.ndim == 3:  # [C,H,W] -> add batch dim
+                feats = feats.unsqueeze(0)
+            Xs.append(feats)
+            Ys.append(labels)
 
-    def layer_activations(self, layer: torch.nn.Module, inputs: torch.Tensor) -> torch.Tensor:
-        acts = None
-        def hook(_m, _in, out):
-            nonlocal acts
-            acts = out.detach()
-        h = layer.register_forward_hook(hook)
-        _ = self.forward(inputs)
-        h.remove()
-        if acts is None:
-            raise RuntimeError("Failed to capture activations")
-        return acts
+        # concat & move to classifier device
+        X = torch.cat(Xs, 0).to(self.device)         # [N,...]
+        y_raw = torch.cat(Ys, 0).to(self.device).view(-1)  # raw concept IDs (e.g., 29,41)
 
-def make_concepts(concepts_root: str, concept_names: Sequence[str]) -> List["Concept"]:
+        # map raw IDs -> [0..C-1]
+        classes = torch.unique(y_raw).sort()[0]      # tensor([...])
+        self._classes = classes.detach().cpu().tolist()
+        y = torch.searchsorted(classes, y_raw).long()  # [N] in 0..C-1
+
+        # flatten features
+        X = X.view(X.size(0), -1)                    # [N,F]
+        C, F = int(classes.numel()), int(X.size(1))
+        if self._linear is None or self._linear.in_features != F or self._linear.out_features != C:
+            self._linear = torch.nn.Linear(F, C, bias=False).to(self.device)
+
+        
+        opt = torch.optim.SGD(self._linear.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        loss_fn = torch.nn.CrossEntropyLoss()
+
+        self._linear.train()
+        for _ in range(self.epochs):
+            opt.zero_grad(set_to_none=True)
+            logits = self._linear(X)                 # [N,C]
+            loss = loss_fn(logits, y)                # y ∈ [0..C-1]
+            loss.backward()
+            opt.step()
+
+        with torch.no_grad():
+            acc = (self._linear(X).argmax(1) == y).float().mean().item()
+        return {"accs": torch.tensor(acc)}
+
+    def weights(self) -> torch.Tensor:
+        assert self._linear is not None, "Call train_and_eval() first."
+        return self._linear.weight.detach().cpu()
+
+    def classes(self) -> List[int]:
+        return self._classes
+def make_concepts_auto(
+    concepts_root: str,
+    concept_names: Sequence[str],
+    *,
+    img_size: int = 128,
+    grayscale: bool = True,
+    device: Optional[torch.device | str] = None,
+    limit_per_concept: int | None = None,
+) -> List["Concept"]:
+    """
+    Builds Captum Concept objects.
+    - On CPU: use path-based Concepts (lazy, memory-light).
+    - On CUDA/MPS: preload tensors on that device to avoid CPU/GPU mismatch.
+    """
     if Concept is None:
         raise ImportError("captum.concept not available. Install captum to run TCAV.")
-    cons = []
+
+    dev = torch.device(device) if device is not None else select_device("cuda")
+    tfm = data_mod.default_transform(img_size, grayscale=grayscale)
+
+    concepts: List[Concept] = []
+    print(f"Building concepts for device: {dev.type}")
+
+    if dev.type == "cpu":
+        # Simple, lazy path-based Concepts (low memory usage)
+        for i, name in enumerate(concept_names):
+            concepts.append(Concept(i, name, concepts_root))
+        return concepts
+
+    # GPU/MPS path: preload tensors onto the chosen device
     for i, name in enumerate(concept_names):
-        cons.append(Concept(i, name, concepts_root))
-    return cons
+        print(f"  - Loading concept: {name}")
+        paths = data_mod.concept_image_paths(concepts_root, name)
+        if limit_per_concept is not None:
+            paths = paths[:limit_per_concept]
+        
+        exs: List[torch.Tensor] = []
+        for p in paths:
+            img = Image.open(p).convert("L") if grayscale else Image.open(p).convert("RGB")
+            t = tfm(img).to(dev).float()
+            exs.append(t)
+        
+        # Build Concept from the list of tensors already on the device
+        concepts.append(Concept(i, name, exs))
+    return concepts
 
 def run_tcav_for_sets(
     classifier: "Classifier",
