@@ -1,38 +1,7 @@
-python .\generator\gen_tcav_concepts.py `
-  --src "C:\Users\Dylan\Desktop\TCAV Captum\data\aixi_shape\train" `
-  --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" `
-  --size 128 `
-  --circle-halves `
-  --square-corners `
-  --make-random-pool `
-  --random-bg-per-image 2
-
-
-python .\generator\generator.py --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts"
-
-python generator\generator.py --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" --size 128 --n-per-concept 200 --random-pool --random-pool-count 3000
-
-python .\generator\generator.py --input "C:\Users\Dylan\Desktop\TCAV Captum\data\aixi_shape\train" --output "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" --max-images 1000
-
-python extract_fractions.py --input ./aixi_dataset --output ./tcav_concepts --no-enhance --max-images 5000
-
-python .\generator\generator.py `
-  --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts" `
-  --size 128 `
-  --per-concept 5000 `
-  --intensities 1-10 `
-  --concepts all `
-  --random-pool `
-  --random-pool-count 5000 `
-  --seed 42
-
-
-python .\generator\generator.py `
-  --out "C:\Users\Dylan\Desktop\TCAV Captum\data\concepts_white" `
-  --size 128 `
-  --per-concept 5000 `
-  --white-only `
-  --concepts all `
-  --random-pool `
-  --random-pool-count 5000 `
-  --seed 42
+cross_arm_bottom   = assemble_concept("cross_arm_bottom", 9, concepts_path=concepts_path)
+cross_arm_left     = assemble_concept("cross_arm_left", 10, concepts_path=concepts_path)
+cross_arm_right    = assemble_concept("cross_arm_right", 11, concepts_path=concepts_path)
+cross_arm_top      = assemble_concept("cross_arm_top", 12, concepts_path=concepts_path)
+cross_arm_horizontal = assemble_concept("cross_arm_horizontal", 13, concepts_path=concepts_path)
+cross_arm_vertical   = assemble_concept("cross_arm_vertical", 14, concepts_path=concepts_path)
+cross_full         = assemble_concept("cross_full", 15, concepts_path=concepts_path)
