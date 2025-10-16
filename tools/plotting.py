@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, List, Sequence, Tuple, Optional, Mapping, Any
 
-import os
+import os, glob
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -157,3 +157,18 @@ def plot_tcav_heatmap_multi(
         plt.savefig(save_path, dpi=200)
     plt.show()
 
+def plot_concepts(num_fig, num_concepts, dicc_concepts, path_to_concepts):
+    _, axis = plt.subplots(num_concepts, num_fig + 1, figsize= (25, 4 * num_concepts))
+
+    for c, concept in enumerate(dicc_concepts):
+        concept_path = os.path.join(path_to_concepts, concept.name)+"/"
+        img_files = glob.glob(concept_path+"*")
+        for i, img_file in enumerate(img_files[:num_fig+1]):
+            if os.path.isfile(img_file):
+                if i == 0:
+                    axis[c, i].text(1.0, 0.5, str(concept.name), ha='right', va='center', family='sans-serif', size=24)
+                else:
+                    img = plt.imread(img_file)
+                    axis[c, i].imshow(img)
+
+                axis[c, i].axis('off')

@@ -1,7 +1,0 @@
-cross_arm_bottom   = assemble_concept("cross_arm_bottom", 9, concepts_path=concepts_path)
-cross_arm_left     = assemble_concept("cross_arm_left", 10, concepts_path=concepts_path)
-cross_arm_right    = assemble_concept("cross_arm_right", 11, concepts_path=concepts_path)
-cross_arm_top      = assemble_concept("cross_arm_top", 12, concepts_path=concepts_path)
-cross_arm_horizontal = assemble_concept("cross_arm_horizontal", 13, concepts_path=concepts_path)
-cross_arm_vertical   = assemble_concept("cross_arm_vertical", 14, concepts_path=concepts_path)
-cross_full         = assemble_concept("cross_full", 15, concepts_path=concepts_path)
