@@ -1,0 +1,5 @@
+Logging to training_logs/training_20251103_120718.txt
+
+
+Training model: Conv=1 | FC=1 | Outputs=3
+  Epoch 01/12 | Train: 0.080 | Val: 0.074
