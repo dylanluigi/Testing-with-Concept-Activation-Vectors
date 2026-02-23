@@ -91,8 +91,24 @@ def seneca(label):
     return float(label > 0)
 
 
+def circle_only(x1=0, x2=0, x3=0):
+    """Binary circle detector: 1 if at least one circle present, 0 otherwise.
+
+    Args:
+        x1: Number of circles
+        x2: Number of squares (unused)
+        x3: Number of crosses (unused)
+
+    Returns:
+        numpy array [1.0] if x1 > 0, else [0.0]
+    """
+    y = np.array([float(x1 > 0)]).astype(np.float32)
+    return y
+
+
 attr_functions = {
     "ssin": ssin,
     "ssum": ssum,
     "discrete": discrete,
+    "circle_only": circle_only,
 }

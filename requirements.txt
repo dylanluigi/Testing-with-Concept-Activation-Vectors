@@ -1,8 +1,6 @@
-numpy
-opencv-python
-matplotlib
-Pillow
-scipy
 torch
 torchvision
 captum
+numpy
+matplotlib
+Pillow
