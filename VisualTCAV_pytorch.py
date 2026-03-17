@@ -29,7 +29,8 @@ from joblib import dump, load
 import PIL.Image, PIL.ImageFilter
 from tqdm import tqdm
 from multiprocessing import dummy as multiprocessing
-from prettytable import PrettyTable
+# from prettytable import PrettyTable
+import pandas as pd
 
 from matplotlib import pyplot as plt, cm as cm
 from matplotlib.gridspec import GridSpec
@@ -345,10 +346,13 @@ class VisualTCAV():
         # Note: This is stored by the caller (explain()) before invoking this method.
         input_tensor = self._current_input_tensor
 
+
+        target = 0 if self.model.binary_classification else class_index 
+        
         ig_attr = lig.attribute(
             input_tensor,
             n_steps=self.m_steps,
-            target=class_index,
+            target=target,
         )
 
         # ig_attr shape: same as the layer output, e.g. [1, C, H, W]
@@ -753,7 +757,7 @@ class LocalVisualTCAV(VisualTCAV):
                         ig_expected = F.relu(logits - logits_baseline)
                         ig_max = ig_expected.max()
                         if(ig_max > 0):
-                            ig_expected_norm = torch.div(ig_expected/ig_max)
+                            ig_expected_norm =  ig_expected / ig_max  
                         else:
                             ig_expected_norm = ig_expected
                             
@@ -1230,15 +1234,11 @@ class GlobalVisualTCAV(VisualTCAV):
         plt.show()
 
     def statsInfo(self):
-        """Print a summary table of global attribution statistics."""
+        """Print a summary table of global attribution statistics using Pandas."""
         if not self.stats:
             raise Exception("Please let the model explain first")
 
-        table = PrettyTable(
-            title=f"Model: {self.model.model_name}; Class: {self.target_class}; Examples: {self.test_images_folder}",
-            field_names=["Concept", "Layer", "Attrib. mean", "Attrib. 95.45% CI"],
-            float_format='.2'
-        )
+        data = []
         for i, concept_name in enumerate(self.concepts):
             for j, layer_name in enumerate(self.layers):
                 stat = self.stats[layer_name][concept_name]
@@ -1246,12 +1246,17 @@ class GlobalVisualTCAV(VisualTCAV):
                 std_val = stat.std if isinstance(stat.std, (int, float)) else stat.std.item()
                 begin_val = stat.begin.item() if isinstance(stat.begin, torch.Tensor) else stat.begin
                 end_val = stat.end.item() if isinstance(stat.end, torch.Tensor) else stat.end
-                table.add_row([
-                    concept_name if j == 0 else "", layer_name,
-                    f"{mean_val:.3g} +- {std_val:.3g}",
-                    [f"{begin_val:.3g}", f"{end_val:.3g}"],
-                ])
-        print(table)
+                
+                data.append({
+                    "Concept": concept_name if j == 0 else "",
+                    "Layer": layer_name,
+                    "Attrib. mean": f"{mean_val:.3g} ± {std_val:.3g}",
+                    "Attrib. 95.45% CI": f"[{begin_val:.3g}, {end_val:.3g}]"
+                })
+        
+        df = pd.DataFrame(data)
+        print(f"\nModel: {self.model.model_name} | Class: {self.target_class} | Folder: {self.test_images_folder}")
+        print(df.to_string(index=False))
 
 
 #####
@@ -1317,15 +1322,20 @@ class Model:
         return list(self.model_wrapper.layer_modules.keys())
 
     def info(self):
-        """Print model information table."""
-        table = PrettyTable(
-            title=f"Model: {self.model_name}",
-            field_names=["N. classes", "Layers"],
-            float_format='.2'
-        )
-        for i, layer_name in enumerate(self.getLayerNames()):
-            table.add_row([len(self.model_wrapper.labels) if i == 0 else "", layer_name])
-        print(table)
+        """Print model information table using Pandas."""
+        num_classes = len(self.model_wrapper.labels)
+        layers = self.getLayerNames()
+        
+        data = []
+        for i, layer_name in enumerate(layers):
+            data.append({
+                "N. classes": num_classes if i == 0 else "",
+                "Layers": layer_name
+            })
+            
+        df = pd.DataFrame(data)
+        print(f"\nModel: {self.model_name}")
+        print(df.to_string(index=False))
 
 
 #####
@@ -1378,22 +1388,22 @@ class Predictions:
         self.model_name = model_name
 
     def info(self, num_of_classes=3):
-        """Print a summary table of top predictions."""
-        table = PrettyTable(
-            title=f"Model: {self.model_name}",
-            field_names=["Image", "Class name", "Confidence"],
-            float_format='.2'
-        )
+        """Print a summary table of top predictions using Pandas."""
+        data = []
         for i in range(min(num_of_classes, len(self.predictions[0]))):
             conf = self.predictions[0][i].confidence
             if isinstance(conf, torch.Tensor):
                 conf = conf.item()
-            table.add_row([
-                self.test_image_filename if i == 0 else "",
-                self.predictions[0][i].class_name,
-                f"{conf:.2g}"
-            ])
-        print(table)
+            
+            data.append({
+                "Image": self.test_image_filename if i == 0 else "",
+                "Class name": self.predictions[0][i].class_name,
+                "Confidence": f"{conf:.2f}"
+            })
+        
+        df = pd.DataFrame(data)
+        print(f"\nModel: {self.model_name}")
+        print(df.to_string(index=False))
 
 
 class Stat:

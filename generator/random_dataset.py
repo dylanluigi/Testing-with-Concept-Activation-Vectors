@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# make_random_pool_combiners.py
-# Build a highly heterogeneous random_pool by *combining* your own photos.
 import argparse, random, math
 from pathlib import Path
 from typing import List, Tuple
@@ -10,7 +7,6 @@ from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
-# ---------------------- IO & preprocessing ----------------------
 def list_images(root: Path) -> List[Path]:
     return [p for p in root.rglob("*") if p.suffix.lower() in IMG_EXTS]
 
@@ -28,7 +24,7 @@ def open_rgb_square(p: Path, size: int) -> Image.Image:
 def basic_aug(img: Image.Image, rng: random.Random) -> Image.Image:
     if rng.random() < 0.5: img = ImageOps.mirror(img)
     if rng.random() < 0.3: img = ImageOps.flip(img)
-    # slight random crop & resize back (jitter 0–6%)
+    # slight random crop & resize back
     if rng.random() < 0.5:
         w, h = img.size
         pad = int(0.06 * min(w, h) * rng.random())
@@ -48,18 +44,16 @@ def pilimg(arr: np.ndarray) -> Image.Image:
     arr = np.clip(arr, 0, 255).astype(np.uint8)
     return Image.fromarray(arr, mode="RGB")
 
-# ---------------------- combiners ----------------------
 def mosaic2x2(imgs: List[Image.Image], rng: random.Random, size: int) -> Image.Image:
     assert len(imgs) >= 4
-    # random split points (avoid tiny tiles)
     x_split = rng.randint(int(0.35*size), int(0.65*size))
     y_split = rng.randint(int(0.35*size), int(0.65*size))
     out = Image.new("RGB", (size, size))
     tiles = [
-        (0,           0,            x_split,      y_split),      # TL
-        (x_split,     0,            size,         y_split),      # TR
-        (0,           y_split,      x_split,      size),         # BL
-        (x_split,     y_split,      size,         size),         # BR
+        (0,0,x_split,y_split),
+        (x_split,0,size,y_split),      
+        (0, y_split, x_split, size),         
+        (x_split, y_split, size, size),         
     ]
     rng.shuffle(imgs)
     for tile, src in zip(tiles, imgs[:4]):
@@ -70,14 +64,12 @@ def mosaic2x2(imgs: List[Image.Image], rng: random.Random, size: int) -> Image.I
     return out
 
 def mixup(a: Image.Image, b: Image.Image, rng: random.Random) -> Image.Image:
-    # alpha in [0.3,0.7] to avoid near-duplicates
     alpha = 0.3 + 0.4 * rng.random()
     A, B = npimg(a), npimg(b)
     C = alpha * A + (1 - alpha) * B
     return pilimg(C)
 
 def cutmix(a: Image.Image, b: Image.Image, rng: random.Random, n_patches: int = None) -> Image.Image:
-    # paste 1–5 random rectangles from b onto a
     if n_patches is None:
         n_patches = rng.randint(1, 5)
     out = a.copy()
@@ -94,7 +86,6 @@ def cutmix(a: Image.Image, b: Image.Image, rng: random.Random, n_patches: int = 
     return out
 
 def patchwork(imgs: List[Image.Image], rng: random.Random, size: int) -> Image.Image:
-    # start from one image; paste many tiny random patches from others
     base = imgs[0].copy()
     W, H = base.size
     n = rng.randint(10, 40)
@@ -107,16 +98,14 @@ def patchwork(imgs: List[Image.Image], rng: random.Random, size: int) -> Image.I
         px = rng.randint(0, W - pw)
         py = rng.randint(0, H - ph)
         patch = src.crop((bx, by, bx + pw, by + ph))
-        # optional light alpha to soften seams
         if rng.random() < 0.5:
-            alpha = int(128 + 127 * rng.random())  # 128..255
+            alpha = int(128 + 127 * rng.random())  
             mask = Image.new("L", (pw, ph), alpha)
             base.paste(patch, (px, py), mask)
         else:
             base.paste(patch, (px, py))
     return base
 
-# ---------------------- driver ----------------------
 def main():
     ap = argparse.ArgumentParser("Compose personal photos into a diverse TCAV random_pool")
     ap.add_argument("--src", required=True, help="Folder with photos (recursively scanned)")
@@ -138,7 +127,6 @@ def main():
     if not paths:
         raise SystemExit(f"No images found under {src}")
 
-    # parse weights
     weights = {}
     for tok in args.weights.split(","):
         name, val = tok.split(":")
@@ -152,7 +140,6 @@ def main():
         imgs = [basic_aug(open_rgb_square(p, args.size), rng) for p in picks]
         return imgs
 
-    # writer
     filelist = (dst / "filelist.txt").open("w")
     written = 0
     i = 0
@@ -172,10 +159,8 @@ def main():
                 imgs = sample_imgs(rng.randint(4, 10))
                 out = patchwork(imgs, rng, args.size)
             else:
-                # fallback: just load one and augment
                 out = sample_imgs(1)[0]
 
-            # reject overly uniform outputs
             std = np.array(out).astype(np.float32).std()
             if std < args.min_std:
                 continue

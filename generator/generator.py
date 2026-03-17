@@ -1,35 +1,13 @@
-#!/usr/bin/env python3
-"""
-AIXI-style TCAV concept synthesizer (shapes + fractions).
-
-Generates black-background (0) grayscale images with low-intensity shapes
-(default 1..10) matching AIXI dataset style:
-
-Concepts:
-  Circles: circle_full, circle_half_{top,bottom,left,right}, circle_quarter_{tl,tr,bl,br}
-  Squares: square_full, square_half_{top,bottom,left,right}, square_corner_{tl,tr,bl,br}, square_edge_{top,bottom,left,right}
-  Crosses: cross_full, cross_arm_{horizontal,vertical,top,bottom,left,right}
-  Random:  random_pool (backgrounds)
-
-Notes
-- Positioning uses a jittered 3x3 grid so concepts aren’t always centered.
-- No cropping → patches naturally include background (no “all-white” issues).
-- Intensities default to 1..10; add --white-only for pure 255 foreground.
-"""
-
 import argparse
 from pathlib import Path
 import numpy as np
 import cv2
 from typing import Dict, List, Tuple
 
-# ------------------------ utils ------------------------
-
 def ensure_dir(p: Path):
     p.mkdir(parents=True, exist_ok=True)
 
 def parse_intensity_spec(spec: str) -> Tuple[int, int]:
-    # "1-10" or "3-8"; fallback to 1..10
     if "-" in spec:
         a, b = spec.split("-", 1)
         return max(0, int(a)), min(255, int(b))
@@ -39,7 +17,6 @@ def bg(size: int) -> np.ndarray:
     return np.zeros((size, size), dtype=np.uint8)
 
 def grid_position(size: int) -> Tuple[int, int, int]:
-    """Return (cx, cy, cell_size) for a jittered 3x3 grid."""
     cell = size // 3
     gx = np.random.randint(0, 3)
     gy = np.random.randint(0, 3)
@@ -60,8 +37,6 @@ def save_concepts(concepts: Dict[str, List[np.ndarray]], out_root: Path):
         for i, im in enumerate(imgs):
             cv2.imwrite(str(d / f"{name}_{i:05d}.png"), im)
         print(f"  ✓ {name}: {len(imgs)}")
-
-# ------------------------ generators ------------------------
 
 def gen_circle_set(size: int, n: int, inten: Tuple[int, int], white_only: bool) -> Dict[str, List[np.ndarray]]:
     result = {"circle_full": [], "circle_half_top": [], "circle_half_bottom": [],
@@ -197,10 +172,10 @@ def gen_cross_set(size: int, n: int, inten: Tuple[int, int], white_only: bool) -
         def horiz(dst, left, right, y1, y2): cv2.rectangle(dst, (left, y1), (right, y2), val, -1)
         def vert(dst, top, bottom, x1, x2): cv2.rectangle(dst, (x1, top), (x2, bottom), val, -1)
 
-        # horizontal (full width at y=cy)
+        # horizontal
         im = img.copy(); horiz(im, cx - span//2, cx + span//2, cy - thick//2, cy + thick//2)
         result["cross_arm_horizontal"].append(im)
-        # vertical (full height at x=cx)
+        # vertical
         im = img.copy(); vert(im, cy - span//2, cy + span//2, cx - thick//2, cx + thick//2)
         result["cross_arm_vertical"].append(im)
 
@@ -222,7 +197,6 @@ def gen_random_pool(size: int, count: int) -> Dict[str, List[np.ndarray]]:
         if np.random.rand() < 0.8:
             imgs.append(np.zeros((size, size), dtype=np.uint8))
         else:
-            # sparse salt noise at low levels, still "backgroundish"
             im = np.zeros((size, size), dtype=np.uint8)
             mask = np.random.rand(size, size) < 0.03
             vals = np.random.randint(1, 3, size=(size, size), dtype=np.uint8)
@@ -230,7 +204,6 @@ def gen_random_pool(size: int, count: int) -> Dict[str, List[np.ndarray]]:
             imgs.append(im)
     return {"random_pool": imgs}
 
-# ------------------------ CLI ------------------------
 
 def main():
     ap = argparse.ArgumentParser(description="Synthesize AIXI-style TCAV concepts (shapes + fractions).")
@@ -254,13 +227,13 @@ def main():
     print("=" * 60)
     print("AIXI-STYLE TCAV CONCEPT SYNTHESIZER")
     print("=" * 60)
-    print(f"out                : {out_root}")
-    print(f"size               : {args.size}")
-    print(f"per concept        : {args.per_concept}")
-    print(f"intensities        : {'255 only' if args.white_only else f'{inten[0]}..{inten[1]}'}")
-    print(f"concept groups     : {args.concepts}")
-    print(f"random_pool        : {args.random_pool}  (count={args.random_pool_count})")
-    print(f"seed               : {args.seed}")
+    print(f"out: {out_root}")
+    print(f"size: {args.size}")
+    print(f"per concept: {args.per_concept}")
+    print(f"intensities: {'255 only' if args.white_only else f'{inten[0]}..{inten[1]}'}")
+    print(f"concept groups: {args.concepts}")
+    print(f"random_pool: {args.random_pool}  (count={args.random_pool_count})")
+    print(f"seed: {args.seed}")
     print("=" * 60)
 
     concepts: Dict[str, List[np.ndarray]] = {}

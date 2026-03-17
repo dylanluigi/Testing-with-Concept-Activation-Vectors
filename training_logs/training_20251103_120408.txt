@@ -1,4 +1,0 @@
-Logging to training_logs/training_20251103_120408.txt
-
-
-Training model: Conv=1 | FC=1 | Outputs=3

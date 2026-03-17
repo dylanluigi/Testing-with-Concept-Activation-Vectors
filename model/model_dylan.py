@@ -17,7 +17,7 @@ class FlexibleTNet(nn.Module):
         super().__init__()
         self.do_sigmoid = do_sigmoid
  
-        # Conv Layers
+        
         conv_blocks = []
         in_ch = num_channels
         for out_ch in conv_channels:
@@ -31,10 +31,10 @@ class FlexibleTNet(nn.Module):
             in_ch = out_ch
         self.conv_layers = nn.Sequential(*conv_blocks)
 
-        # Final spatial sizye after conv and pool
+        
         size_img = int(size_img // np.power(2, len(conv_channels)))
 
-        # FC
+        
         fc_blocks = []
         in_features = size_img * size_img * conv_channels[-1]
 

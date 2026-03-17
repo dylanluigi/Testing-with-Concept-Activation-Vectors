@@ -1,6 +1,3 @@
-# view_labels_big.py
-# Crisp, non-distorting viewer for small images + GT labels.
-
 import argparse, json, random
 from pathlib import Path
 import cv2
@@ -12,11 +9,6 @@ def gather_images(folder: Path):
     return sorted([p for p in folder.rglob("*") if p.suffix.lower() in EXTS])
 
 def resize_preserve_aspect(img, max_w, max_h, scale=None, integer=True, interp=cv2.INTER_NEAREST):
-    """
-    If scale is None, compute a scale that fits the image inside (max_w, max_h),
-    allowing UPSCALING. If integer=True, snap scale to the nearest integer >= 1.
-    Returns resized image and the scale used.
-    """
     h, w = img.shape[:2]
     if scale is None:
         s_fit = min(max_w / max(w, 1), max_h / max(h, 1))
@@ -33,7 +25,6 @@ def resize_preserve_aspect(img, max_w, max_h, scale=None, integer=True, interp=c
     return resized, s
 
 def pad_to_canvas(img, canvas_w, canvas_h, bg=16):
-    """Center the image on a canvas (no distortion)."""
     if img.ndim == 2:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     h, w = img.shape[:2]
@@ -80,16 +71,16 @@ def main():
     if args.shuffle:
         random.shuffle(pairs)
 
-    # Window + viewing state
-    win = "GT Viewer  [←/a prev, →/d next, +/- zoom, i integer, f fullscreen, space pause, r reshuffle, q quit]"
+    
+    win = "GT Viewer"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win, args.winw, args.winh)
 
     idx = 0
     paused = (args.autoplay == 0)
     delay = max(1, args.autoplay) if not paused else 0
-    zoom = 1.0            # extra multiplier on top of fit scale
-    integer_snap = True   # crisp integer scaling by default
+    zoom = 1.0            
+    integer_snap = True   
     fullscreen = False
 
     while True:
@@ -99,10 +90,10 @@ def main():
             img = np.full((128, 128, 3), 30, np.uint8)
             cv2.putText(img, "Failed to read", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
 
-        # 1) Fit (with upscaling), 2) apply zoom, 3) integer snap if enabled
+        
         base_fit, s_fit = resize_preserve_aspect(img, args.winw, args.winh,
                                                  scale=None, integer=False, interp=cv2.INTER_NEAREST)
-        # recompute with zoom & snap
+        
         target_scale = s_fit * zoom
         vis, _ = resize_preserve_aspect(img, args.winw, args.winh,
                                         scale=target_scale, integer=integer_snap, interp=cv2.INTER_NEAREST)
@@ -117,21 +108,21 @@ def main():
 
         if k in (ord('q'), 27):
             break
-        elif k in (ord('d'), 2555904):   # right
+        elif k in (ord('d'), 2555904):   
             idx = (idx + 1) % len(pairs)
-        elif k in (ord('a'), 2424832):   # left
+        elif k in (ord('a'), 2424832):   
             idx = (idx - 1) % len(pairs)
-        elif k == ord(' '):              # pause/play
+        elif k == ord(' '):              
             paused = not paused
-        elif k in (ord('r'), ord('R')):  # reshuffle
+        elif k in (ord('r'), ord('R')):  
             random.shuffle(pairs); idx = 0
-        elif k in (ord('+'), ord('=')):  # zoom in
+        elif k in (ord('+'), ord('=')):  
             zoom *= 1.25
-        elif k in (ord('-'), ord('_')):  # zoom out
+        elif k in (ord('-'), ord('_')):  
             zoom = max(0.1, zoom / 1.25)
-        elif k in (ord('i'), ord('I')):  # toggle integer scaling
+        elif k in (ord('i'), ord('I')):  
             integer_snap = not integer_snap
-        elif k in (ord('f'), ord('F')):  # toggle fullscreen
+        elif k in (ord('f'), ord('F')):  
             fullscreen = not fullscreen
             prop = cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL
             cv2.setWindowProperty(win, cv2.WND_PROP_FULLSCREEN, prop)
